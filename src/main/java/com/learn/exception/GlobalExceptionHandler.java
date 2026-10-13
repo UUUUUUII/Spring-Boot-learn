@@ -8,6 +8,7 @@ import org.springframework.web.ErrorResponse;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
@@ -43,6 +44,15 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ProblemDetail> handleUnreadableRequestBody(
             HttpMessageNotReadableException exception) {
         return badRequest("请求体错误", "请求体为空、JSON 格式错误或字段类型不匹配");
+    }
+
+    /** 唯一键冲突表示请求与已有数据冲突，而不是服务器内部错误。 */
+    @ExceptionHandler(DuplicateKeyException.class)
+    public ResponseEntity<ProblemDetail> handleDuplicateKey(DuplicateKeyException exception) {
+        ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(
+                HttpStatus.CONFLICT, "数据与现有记录冲突");
+        problemDetail.setTitle("数据冲突");
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(problemDetail);
     }
 
     /** 路径变量或查询参数无法转换成声明的 Java 类型时，统一返回 400。 */
