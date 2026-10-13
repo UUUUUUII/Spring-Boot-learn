@@ -51,12 +51,16 @@ public class UsersController {
     }
 
     /**
-     * POST /api/users：创建用户。
-     * 请求体使用 JSON，当前实体的字符串主键需要由调用方提供；成功时返回 201 和新建用户。
+    /**
+     * POST /api/users/create：创建用户。
+     * 请求体为经过字段校验的 JSON 用户实体；业务层会在写入数据库前对密码做 BCrypt 哈希。
+     *
+     * @param user 请求体中的新用户信息，字符串主键按当前实体约定由调用方提供
+     * @return HTTP 200 和新建用户的统一响应；响应序列化不会包含密码字段
      */
-    @PostMapping
+    @PostMapping("/create")
     public ResponseEntity<ApiResponse<Users>> create(@Valid @RequestBody Users user) {
-        // 正常插入返回 200；Mapper 未插入记录时返回 500。数据库异常通常会由 Spring 转为错误响应。
+        // Mapper 未插入任何记录时显式转为 500；数据库抛出的异常交由全局异常处理器转换。
         if (!usersService.create(user)) {
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "创建用户失败");
         }
@@ -64,8 +68,12 @@ public class UsersController {
     }
 
     /**
-     * PUT /api/users/{id}：根据路径 ID 更新用户。
-     * 成功时返回 200 和统一响应体；目标记录不存在时返回 404。
+     * PUT /api/users/{id}：根据路径中的主键更新用户信息。
+     * 路径 ID 优先于请求体中的 ID；密码字段为空或未提供时不修改现有密码。
+     *
+     * @param id URL 路径中的目标用户主键
+     * @param user 请求体中的待更新字段
+     * @return 更新成功时返回 HTTP 200 和空数据统一响应；没有更新记录时返回 404
      */
     @PutMapping("/{id}")
     public ResponseEntity<ApiResponse<Void>> update(@PathVariable String id, @RequestBody Users user) {
@@ -75,7 +83,12 @@ public class UsersController {
         return ResponseEntity.ok(ApiResponse.emptySuccess());
     }
 
-    /** DELETE /api/users/{id}：按主键删除；成功返回 200，记录不存在返回 404。 */
+    /**
+     * DELETE /api/users/{id}：按 URL 路径中的主键删除用户。
+     *
+     * @param id URL 路径中的目标用户主键
+     * @return 删除成功时返回 HTTP 200 和空数据统一响应；没有删除记录时返回 404
+     */
     @DeleteMapping("/{id}")
     public ResponseEntity<ApiResponse<Void>> delete(@PathVariable String id) {
         if (!usersService.delete(id)) {

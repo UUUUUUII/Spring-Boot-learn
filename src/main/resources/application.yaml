@@ -23,6 +23,14 @@ logging:
   level:
     com.learn: debug
 
+app:
+  security:
+    jwt:
+      # 仅供本地开发使用的示例密钥；部署环境应通过 APP_SECURITY_JWT_SECRET 提供独立的 Base64 密钥。
+      secret: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
+      # 默认令牌有效 15 分钟；生产环境可通过 APP_SECURITY_JWT_EXPIRATION_SECONDS 覆盖。
+      expiration-seconds: 900
+
 #mybatis-plus配置
 mybatis-plus:
   configuration:

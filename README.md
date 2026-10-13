@@ -16,10 +16,15 @@
 ```text
 src/main/java/com/learn/
 ├── SpringBootLearnApplication.java  # 应用入口和 Mapper 扫描
+├── auth/                            # 登录身份、JWT 签发与校验
 ├── common/ApiResponse.java          # 统一成功响应
+├── config/                           # MVC 拦截器和密码编码配置
+├── controller/AuthController.java    # 登录接口
 ├── controller/UsersController.java  # 用户 HTTP 接口
 ├── domain/Users.java                # users 表实体及请求校验
 ├── exception/GlobalExceptionHandler.java # 全局异常处理
+├── interceptor/AuthenticationInterceptor.java # JWT/Session 身份拦截
+├── interceptor/RequestLoggingInterceptor.java # 请求耗时日志拦截器
 ├── mapper/UsersMapper.java          # MyBatis-Plus 数据访问
 └── service/
 		├── UsersService.java            # 业务层接口
@@ -32,6 +37,8 @@ src/test/java/com/learn/             # 测试
 
 请求处理流程为：`UsersController` → `UsersService` → `UsersMapper` → MySQL。控制器负责 HTTP 路由和状态码，业务层调用 MyBatis-Plus，Mapper 继承 `BaseMapper<Users>` 获得常用 CRUD 操作。
 
+`RequestLoggingInterceptor` 在请求进入处理器前记录开始时间，并在请求完成后输出 HTTP 方法、URI、状态码和耗时。它由 `WebMvcConfig` 通过 `WebMvcConfigurer` 注册，当前匹配所有路径；新增拦截器时可在该配置中设置匹配或排除路径。
+
 ## 用户接口
 
 所有接口前缀为 `/api/users`，默认服务端口为 `8080`。
@@ -40,7 +47,7 @@ src/test/java/com/learn/             # 测试
 | --- | --- | --- | --- |
 | GET | `/api/users` | 查询全部用户 | 200 |
 | GET | `/api/users/{id}` | 按 ID 查询；不存在时 `data` 为 `null` | 200 |
-| POST | `/api/users` | 创建用户 | 200 |
+| POST | `/api/users/create` | 创建用户 | 200 |
 | PUT | `/api/users/{id}` | 更新用户；ID 以路径参数为准 | 200 |
 | DELETE | `/api/users/{id}` | 删除用户 | 200 |
 
@@ -59,6 +66,19 @@ src/test/java/com/learn/             # 测试
 
 请求校验失败返回 HTTP 400，重复键冲突返回 409，更新或删除不存在的用户返回 404。异常响应由全局异常处理器返回 Spring `ProblemDetail` 格式，不使用上述成功响应包装。
 
+## 身份认证
+
+`POST /api/auth/login` 使用 `users.name` 和密码登录。成功响应包含默认有效期为 15 分钟的 JWT，同时设置 `JSESSIONID` Cookie；后续受保护的 `/api/**` 接口可使用其中一种凭证：
+
+请求体格式：`{"name":"用户名","pw":"密码"}`，字段名与 `LoginRequest` 一致。登录失败或未认证请求返回 HTTP 401；Session 写请求缺少 CSRF token 或校验失败时返回 HTTP 403。
+
+- JWT：请求头 `Authorization: Bearer <accessToken>`。
+- Session：在同一客户端保留并发送登录响应中的 `JSESSIONID` Cookie。
+
+使用 Session 调用 `POST`、`PUT`、`PATCH`、`DELETE` 等写接口时，还必须将登录响应的 `csrfToken` 放入 `X-CSRF-TOKEN` 请求头；使用 Bearer JWT 时不需要该头。
+
+JWT 密钥通过环境变量 `APP_SECURITY_JWT_SECRET` 提供，值必须是至少 32 字节密钥的 Base64 编码；不要将密钥提交到配置文件或代码库。新建和更新用户时密码使用 BCrypt 哈希。已有数据库中的明文密码不会被认证逻辑接受，请在启用认证前重置这些账号密码。JWT 为无状态凭证，Session 登出或过期不会撤销已签发的 JWT，令牌会在自身过期时间后失效。
+
 > **ID 配置注意：** `Users.id` 当前标注为 MyBatis-Plus 的 `IdType.AUTO`，但创建接口注释写明 ID 由调用方提供。请按实际数据库主键配置核对并统一这两处约定，再确定创建请求是否需要传入 `id`。
 
 ## 本地运行
@@ -75,6 +95,10 @@ src/test/java/com/learn/             # 测试
 Windows 命令提示符或 PowerShell：
 
 ```powershell
+$bytes = New-Object byte[] 32
+$rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+$rng.GetBytes($bytes)
+$env:APP_SECURITY_JWT_SECRET = [Convert]::ToBase64String($bytes)
 ./mvnw.cmd spring-boot:run
 ./mvnw.cmd spring-boot:run "-Dspring-boot.run.arguments=--spring.profiles.active=prod"
 ./mvnw.cmd test

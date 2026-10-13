@@ -3,6 +3,7 @@ package com.learn.service.impl;
 import com.learn.domain.Users;
 import com.learn.mapper.UsersMapper;
 import com.learn.service.UsersService;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -16,10 +17,13 @@ public class UsersServiceImpl implements UsersService {
 
     /** final 字段配合构造器注入，依赖创建后不可替换，也便于单元测试时提供替身实现。 */
     private final UsersMapper usersMapper;
+    /** 负责对新密码做 BCrypt 哈希；数据库中不保存客户端提交的明文密码。 */
+    private final PasswordEncoder passwordEncoder;
 
-    /** Spring 会自动注入容器中的 UsersMapper 实例。 */
-    public UsersServiceImpl(UsersMapper usersMapper) {
+    /** Spring 自动注入数据访问对象和密码哈希器。 */
+    public UsersServiceImpl(UsersMapper usersMapper, PasswordEncoder passwordEncoder) {
         this.usersMapper = usersMapper;
+        this.passwordEncoder = passwordEncoder;
     }
 
     @Override
@@ -36,7 +40,8 @@ public class UsersServiceImpl implements UsersService {
 
     @Override
     public boolean create(Users user) {
-        // insert 返回影响的行数；大于 0 代表至少有一行被写入。
+        // 在持久化前替换实体中的原始密码为 BCrypt 哈希；响应序列化也会隐藏 pw 字段。
+        user.setPw(passwordEncoder.encode(user.getPw()));
         return usersMapper.insert(user) > 0;
     }
 
@@ -44,6 +49,10 @@ public class UsersServiceImpl implements UsersService {
     public boolean update(String id, Users user) {
         // 以 URL 路径中的 id 为准，避免请求体中的 id 改变本次更新目标。
         user.setId(id);
+        if (user.getPw() != null) {
+            // 空字符串代表本次不修改密码；非空新密码必须重新哈希后再更新。
+            user.setPw(user.getPw().isBlank() ? null : passwordEncoder.encode(user.getPw()));
+        }
         // updateById 根据实体主键更新；默认字段策略通常会忽略值为 null 的属性。
         return usersMapper.updateById(user) > 0;
     }
