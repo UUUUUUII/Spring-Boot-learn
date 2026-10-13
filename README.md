@@ -24,7 +24,9 @@ src/main/java/com/learn/
 └── service/
 		├── UsersService.java            # 业务层接口
 		└── impl/UsersServiceImpl.java   # 业务层实现
-src/main/resources/application.yaml  # 应用和数据库配置
+src/main/resources/application.yaml      # 通用配置，默认启用 dev 环境
+src/main/resources/application-dev.yaml  # 本地开发环境数据库配置
+src/main/resources/application-prod.yaml # 生产环境数据库配置
 src/test/java/com/learn/             # 测试
 ```
 
@@ -65,7 +67,8 @@ src/test/java/com/learn/             # 测试
 
 - 安装 JDK 25，并确保 `java -version` 指向该版本。
 - 准备 MySQL，并创建数据库 `test` 和兼容实体字段的 `users` 表。
-- 修改 `src/main/resources/application.yaml` 中的数据库 URL、用户名和密码；当前示例连接本机 `test` 数据库，运行前请使用自己的本地配置，勿将真实凭据提交到版本库。
+- 默认启用 `dev` 环境，修改 `src/main/resources/application-dev.yaml` 中的数据库 URL、用户名和密码；当前示例连接本机 `test` 数据库，运行前请使用自己的本地配置，勿将真实凭据提交到版本库。
+- 生产环境通过 `--spring.profiles.active=prod` 启动，并设置 `DB_URL`、`DB_USERNAME` 和 `DB_PASSWORD` 环境变量；不要将生产凭据写入配置文件。
 
 ### 启动和测试
 
@@ -73,6 +76,7 @@ Windows 命令提示符或 PowerShell：
 
 ```powershell
 ./mvnw.cmd spring-boot:run
+./mvnw.cmd spring-boot:run "-Dspring-boot.run.arguments=--spring.profiles.active=prod"
 ./mvnw.cmd test
 ```
 
