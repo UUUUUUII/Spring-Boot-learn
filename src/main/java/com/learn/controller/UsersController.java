@@ -3,6 +3,7 @@ package com.learn.controller;
 import com.learn.common.ApiResponse;
 import com.learn.domain.Users;
 import com.learn.service.UsersService;
+import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -39,12 +40,12 @@ public class UsersController {
         return ApiResponse.success(usersService.findAll());
     }
 
-    /** GET /api/users/{id}：按主键查询；存在时返回 200，不存在时返回 404。 */
+    /** GET /api/users/{id}：按主键查询；无论是否命中都返回 200，未命中时 data 为 null。 */
     @GetMapping("/{id}")
     public ResponseEntity<ApiResponse<Users>> findById(@PathVariable String id) {
         Users user = usersService.findById(id);
         if (user == null) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "用户不存在");
+            return ResponseEntity.ok(ApiResponse.success(null));
         }
         return ResponseEntity.ok(ApiResponse.success(user));
     }
@@ -54,16 +55,12 @@ public class UsersController {
      * 请求体使用 JSON，当前实体的字符串主键需要由调用方提供；成功时返回 201 和新建用户。
      */
     @PostMapping
-    public ResponseEntity<ApiResponse<Users>> create(@RequestBody Users user) {
-        // 空 ID 无法定位 users 表的主键，因此在进入业务层前返回 400 Bad Request。
-        if (user.getId() == null || user.getId().isBlank()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "用户 ID 不能为空");
-        }
-        // 正常插入返回 201；Mapper 未插入记录时返回 500。数据库异常通常会由 Spring 转为错误响应。
+    public ResponseEntity<ApiResponse<Users>> create(@Valid @RequestBody Users user) {
+        // 正常插入返回 200；Mapper 未插入记录时返回 500。数据库异常通常会由 Spring 转为错误响应。
         if (!usersService.create(user)) {
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "创建用户失败");
         }
-        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(user));
+        return ResponseEntity.status(HttpStatus.OK).body(ApiResponse.success(user));
     }
 
     /**
