@@ -1,5 +1,6 @@
 package com.learn.controller;
 
+import com.learn.common.ApiResponse;
 import com.learn.domain.Users;
 import com.learn.service.UsersService;
 import org.springframework.http.HttpStatus;
@@ -12,6 +13,7 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 
@@ -31,17 +33,20 @@ public class UsersController {
         this.usersService = usersService;
     }
 
-    /** GET /api/users：查询全部用户，结果由 Spring 自动序列化为 JSON 数组。 */
+    /** GET /api/users：查询全部用户。 */
     @GetMapping
-    public List<Users> findAll() {
-        return usersService.findAll();
+    public ApiResponse<List<Users>> findAll() {
+        return ApiResponse.success(usersService.findAll());
     }
 
     /** GET /api/users/{id}：按主键查询；存在时返回 200，不存在时返回 404。 */
     @GetMapping("/{id}")
-    public ResponseEntity<Users> findById(@PathVariable String id) {
+    public ResponseEntity<ApiResponse<Users>> findById(@PathVariable String id) {
         Users user = usersService.findById(id);
-        return user == null ? ResponseEntity.notFound().build() : ResponseEntity.ok(user);
+        if (user == null) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "用户不存在");
+        }
+        return ResponseEntity.ok(ApiResponse.success(user));
     }
 
     /**
@@ -49,33 +54,36 @@ public class UsersController {
      * 请求体使用 JSON，当前实体的字符串主键需要由调用方提供；成功时返回 201 和新建用户。
      */
     @PostMapping
-    public ResponseEntity<Users> create(@RequestBody Users user) {
+    public ResponseEntity<ApiResponse<Users>> create(@RequestBody Users user) {
         // 空 ID 无法定位 users 表的主键，因此在进入业务层前返回 400 Bad Request。
         if (user.getId() == null || user.getId().isBlank()) {
-            return ResponseEntity.badRequest().build();
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "用户 ID 不能为空");
         }
         // 正常插入返回 201；Mapper 未插入记录时返回 500。数据库异常通常会由 Spring 转为错误响应。
-        return usersService.create(user)
-                ? ResponseEntity.status(HttpStatus.CREATED).body(user)
-                : ResponseEntity.internalServerError().build();
+        if (!usersService.create(user)) {
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "创建用户失败");
+        }
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(user));
     }
 
     /**
      * PUT /api/users/{id}：根据路径 ID 更新用户。
-     * 成功时返回 204（无响应体）；目标记录不存在时返回 404。
+     * 成功时返回 200 和统一响应体；目标记录不存在时返回 404。
      */
     @PutMapping("/{id}")
-    public ResponseEntity<Void> update(@PathVariable String id, @RequestBody Users user) {
-        return usersService.update(id, user)
-                ? ResponseEntity.noContent().build()
-                : ResponseEntity.notFound().build();
+    public ResponseEntity<ApiResponse<Void>> update(@PathVariable String id, @RequestBody Users user) {
+        if (!usersService.update(id, user)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "用户不存在");
+        }
+        return ResponseEntity.ok(ApiResponse.emptySuccess());
     }
 
-    /** DELETE /api/users/{id}：按主键删除；成功返回 204，记录不存在返回 404。 */
+    /** DELETE /api/users/{id}：按主键删除；成功返回 200，记录不存在返回 404。 */
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> delete(@PathVariable String id) {
-        return usersService.delete(id)
-                ? ResponseEntity.noContent().build()
-                : ResponseEntity.notFound().build();
+    public ResponseEntity<ApiResponse<Void>> delete(@PathVariable String id) {
+        if (!usersService.delete(id)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "用户不存在");
+        }
+        return ResponseEntity.ok(ApiResponse.emptySuccess());
     }
 }
